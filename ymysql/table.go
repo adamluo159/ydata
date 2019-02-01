@@ -99,10 +99,12 @@ func (t *tableInfo) run() {
 				timeoutCount = 0
 				t.tclose()
 				log.Info("time to destory goroute tname:%s", t.tname)
-			} else if count > 0 && t.insert() == nil { //定时存入mysql
-				log.Info("time insert success count:%d tname:%s", count, t.tname)
+			} else if count > 0 {
+				if t.insert() == nil { //定时存入mysql
+					log.Info("time  insert success count:%d tname:%s", count, t.tname)
+					count = 0
+				}
 				timeoutCount = 0
-				count = 0
 			}
 		}
 	}
@@ -128,4 +130,5 @@ func (t *tableInfo) tclose() {
 
 	t.bclose = true
 	close(t.values_queue)
+	log.Info("table:%s close", t.tname)
 }

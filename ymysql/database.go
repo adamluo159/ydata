@@ -3,6 +3,7 @@ package ymysql
 import (
 	"database/sql"
 	"fmt"
+	"reflect"
 	"sync"
 
 	"github.com/adamluo159/ydata/log"
@@ -24,6 +25,7 @@ type dataBaseInfo struct {
 	dbname     string
 	queue_len  int
 	save_count int
+	bclose     bool
 
 	tables map[string]*tableInfo
 
@@ -49,6 +51,11 @@ func New(user, passwd, addr, dbname string, qlen, save_count int) (IDataBaseInfo
 }
 
 func (dbase *dataBaseInfo) Close() {
+	dbase.Lock()
+	defer dbase.Unlock()
+	log.Info("database:%s closeing. ", dbase.dbname)
+
+	dbase.bclose = true
 	for _, v := range dbase.tables {
 		v.tclose()
 	}
@@ -67,24 +74,37 @@ func (dbase *dataBaseInfo) Handle(body []byte) error {
 		return fmt.Errorf("tablename should not emtpy, json:%s", string(body))
 	}
 
+	if reflect.TypeOf(v).String() != "string" {
+		return fmt.Errorf("tablename type string, json:%s", string(body))
+	}
+
 	tname := v.(string)
 	if tname == "" {
 		return fmt.Errorf("tablename should not emtpy, json:%s", string(body))
 	}
-	t := dbase.getTable(tname, data)
+
+	t, err := dbase.getTable(tname, data)
+	if err != nil {
+		return err
+	}
 	return t.handle(data)
 }
 
-func (dbase *dataBaseInfo) getTable(tname string, data map[string]interface{}) *tableInfo {
+func (dbase *dataBaseInfo) getTable(tname string, data map[string]interface{}) (*tableInfo, error) {
 	dbase.Lock()
 	defer dbase.Unlock()
+
+	if dbase.bclose {
+		return nil, fmt.Errorf("database:%s close table:%s", dbase.dbname, tname)
+	}
+
 	table, ok := dbase.tables[tname]
 	if !ok {
 		table = newTable(tname, data, dbase)
 		dbase.tables[tname] = table
 		dbase.Add(1)
 	}
-	return table
+	return table, nil
 }
 
 func (dbase *dataBaseInfo) removeTable(tname string) {
