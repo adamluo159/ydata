@@ -18,6 +18,8 @@ type tableInfo struct {
 
 	values_queue chan string
 	dbase        *dataBaseInfo
+	in_count     int
+	insert_count int
 	sync.RWMutex
 }
 
@@ -63,6 +65,7 @@ func (t *tableInfo) handle(data map[string]interface{}) error {
 			return fmt.Errorf("table values type error, tname:%s, v:%+v k:%+v", t.tname, vv, k)
 		}
 	}
+	t.in_count++
 	tv := "(" + strings.Join(values, ",") + ")"
 	t.values_queue <- tv
 
@@ -73,12 +76,14 @@ func (t *tableInfo) run() {
 	var count, timeoutCount int
 
 	timeout := time.NewTicker(time.Second * 5)
-	log.Info("table run tick time:%ds, tname:%s", 5, t.tname)
+	log.Info("table run tick time:%ds tname:%s", 5, t.tname)
 	for {
 		select {
 		case v, ok := <-t.values_queue:
 			if ok == false {
-				log.Info("table channel close and empty tname:%s", t.tname)
+				t.insert_count += count
+				t.insert()
+				log.Info("table channel close and empty tname:%s in_count:%d insert_count:%d count:%d", t.tname, t.in_count, t.insert_count, count)
 				goto exit
 			}
 			if t.values == "" {
@@ -88,7 +93,8 @@ func (t *tableInfo) run() {
 			}
 			count++
 			if count >= t.dbase.save_count && t.insert() == nil {
-				log.Info("value insert success count:%d tname:%s", count, t.tname)
+				log.Debug("value insert success count:%d tname:%s", count, t.tname)
+				t.insert_count += count
 				timeoutCount = 0
 				count = 0
 			}
@@ -101,7 +107,8 @@ func (t *tableInfo) run() {
 				log.Info("time to destory goroute tname:%s", t.tname)
 			} else if count > 0 {
 				if t.insert() == nil { //定时存入mysql
-					log.Info("time  insert success count:%d tname:%s", count, t.tname)
+					log.Debug("time  insert success count:%d tname:%s", count, t.tname)
+					t.insert_count += count
 					count = 0
 				}
 				timeoutCount = 0
@@ -130,5 +137,4 @@ func (t *tableInfo) tclose() {
 
 	t.bclose = true
 	close(t.values_queue)
-	log.Info("table:%s close", t.tname)
 }

@@ -62,7 +62,7 @@ func TestHandle(t *testing.T) {
 func TestClose(t *testing.T) {
 	gdatabase.Close()
 
-	dbase, err := New("", "", "127.0.0.1", "test", 30, 1)
+	dbase, err := New("", "", "127.0.0.1", "test", 100, 80)
 	if err != nil {
 		panic(err)
 	}
@@ -80,6 +80,7 @@ func TestClose(t *testing.T) {
 			time.Sleep(time.Millisecond)
 		}
 	}()
+	time.Sleep(time.Second * 10)
 	dbase.Close()
 	time.Sleep(time.Minute)
 }
