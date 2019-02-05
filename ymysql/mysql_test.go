@@ -26,7 +26,7 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
-func TestHandle(t *testing.T) {
+func TestInsert(t *testing.T) {
 	yd := &ydataTable{1, "lzy", "test_ydata"}
 	byte_yd, _ := json.Marshal(yd)
 

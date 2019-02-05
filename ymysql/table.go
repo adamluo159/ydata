@@ -4,17 +4,18 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/adamluo159/ydata/log"
 )
 
 type tableInfo struct {
-	dbfields []string
-	values   string
-	fields   string
-	tname    string
-	bclose   bool
+	dbfields  []string
+	values    string
+	fields    string
+	tname     string
+	closeFlag int32
 
 	values_queue chan string
 	dbase        *dataBaseInfo
@@ -44,12 +45,9 @@ func newTable(tname string, data map[string]interface{}, dbase *dataBaseInfo) *t
 }
 
 func (t *tableInfo) handle(data map[string]interface{}) error {
-	t.RLock()
-	if t.bclose {
-		t.RUnlock()
+	if atomic.LoadInt32(&t.closeFlag) == 1 {
 		return fmt.Errorf("table closing. table name:%s", t.tname)
 	}
-	t.RUnlock()
 
 	values := make([]string, 0, 30)
 	for i := 0; i < len(t.dbfields); i++ {
@@ -81,8 +79,10 @@ func (t *tableInfo) run() {
 		select {
 		case v, ok := <-t.values_queue:
 			if ok == false {
-				t.insert_count += count
-				t.insert()
+				if count > 0 {
+					t.insert_count += count
+					t.insert()
+				}
 				log.Info("table channel close and empty tname:%s in_count:%d insert_count:%d count:%d", t.tname, t.in_count, t.insert_count, count)
 				goto exit
 			}
@@ -132,9 +132,6 @@ func (t *tableInfo) insert() error {
 }
 
 func (t *tableInfo) tclose() {
-	t.Lock()
-	defer t.Unlock()
-
-	t.bclose = true
+	atomic.StoreInt32(&t.closeFlag, 1)
 	close(t.values_queue)
 }
