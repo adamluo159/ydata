@@ -1,4 +1,4 @@
-package ymysql
+package mysql
 
 import (
 	"fmt"

@@ -1,10 +1,11 @@
-package ymysql
+package mysql
 
 import (
 	"database/sql"
 	"fmt"
 	"reflect"
 	"sync"
+	"sync/atomic"
 
 	"github.com/adamluo159/ydata/log"
 	_ "github.com/go-sql-driver/mysql"
@@ -25,11 +26,11 @@ type dataBaseInfo struct {
 	dbname     string
 	queue_len  int
 	save_count int
-	bclose     bool
+	close_flag int32
 
 	tables map[string]*tableInfo
 
-	sync.Mutex
+	sync.RWMutex
 	sync.WaitGroup
 }
 
@@ -40,30 +41,32 @@ func New(user, passwd, addr, dbname string, qlen, save_count int) (IDataBaseInfo
 		return nil, err
 	}
 
-	dbase := &dataBaseInfo{
+	d := &dataBaseInfo{
 		tables:     make(map[string]*tableInfo),
 		db:         db,
 		queue_len:  qlen,
 		save_count: save_count,
 		dbname:     dbname,
 	}
-	return dbase, nil
+	return d, nil
 }
 
-func (dbase *dataBaseInfo) Close() {
-	dbase.Lock()
-	defer dbase.Unlock()
-	log.Info("database:%s closeing. ", dbase.dbname)
+func (d *dataBaseInfo) Close() {
+	log.Info("database:%s closeing. ", d.dbname)
 
-	dbase.bclose = true
-	for _, v := range dbase.tables {
+	atomic.AddInt32(&d.close_flag, 1)
+
+	d.RLock()
+	for _, v := range d.tables {
 		v.tclose()
 	}
-	dbase.Wait()
-	dbase.db.Close()
+	d.RUnlock()
+
+	d.Wait()
+	d.db.Close()
 }
 
-func (dbase *dataBaseInfo) Handle(body []byte) error {
+func (d *dataBaseInfo) Handle(body []byte) error {
 	data := make(map[string]interface{})
 	err := json.Unmarshal(body, &data)
 	if err != nil {
@@ -83,33 +86,47 @@ func (dbase *dataBaseInfo) Handle(body []byte) error {
 		return fmt.Errorf("tablename should not emtpy, json:%s", string(body))
 	}
 
-	t, err := dbase.getTable(tname, data)
+	t, err := d.getTable(tname, data)
 	if err != nil {
 		return err
 	}
 	return t.handle(data)
 }
 
-func (dbase *dataBaseInfo) getTable(tname string, data map[string]interface{}) (*tableInfo, error) {
-	dbase.Lock()
-	defer dbase.Unlock()
-
-	if dbase.bclose {
-		return nil, fmt.Errorf("database:%s close table:%s", dbase.dbname, tname)
+func (d *dataBaseInfo) getTable(tname string, data map[string]interface{}) (*tableInfo, error) {
+	if atomic.LoadInt32(&d.close_flag) == 1 {
+		return nil, fmt.Errorf("database:%s close table:%s", d.dbname, tname)
 	}
 
-	table, ok := dbase.tables[tname]
-	if !ok {
-		table = newTable(tname, data, dbase)
-		dbase.tables[tname] = table
-		dbase.Add(1)
+	d.RLock()
+	table, ok := d.tables[tname]
+	if ok {
+		d.RUnlock()
+		return table, nil
 	}
+	d.RUnlock()
+
+	d.Lock()
+	defer d.Unlock()
+
+	table, ok = d.tables[tname]
+	if ok {
+		return table, nil
+	}
+
+	table = newTable(tname, data, d)
+	d.tables[tname] = table
+	d.Add(1)
+
 	return table, nil
 }
 
-func (dbase *dataBaseInfo) removeTable(tname string) {
-	if _, ok := dbase.tables[tname]; ok {
-		delete(dbase.tables, tname)
-		log.Info("remove table  database:%s tname:%s", dbase.dbname, tname)
+func (d *dataBaseInfo) removeTable(tname string) {
+	d.Lock()
+	defer d.Unlock()
+
+	if _, ok := d.tables[tname]; ok {
+		delete(d.tables, tname)
+		log.Info("remove table  database:%s tname:%s", d.dbname, tname)
 	}
 }

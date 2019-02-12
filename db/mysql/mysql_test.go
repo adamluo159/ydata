@@ -1,4 +1,4 @@
-package ymysql
+package mysql
 
 import (
 	"log"
@@ -56,7 +56,7 @@ func TestInsert(t *testing.T) {
 		t.Errorf("step 2 error :%v", err)
 	}
 
-	time.Sleep(time.Minute)
+	time.Sleep(time.Second * 15)
 }
 
 func TestClose(t *testing.T) {
