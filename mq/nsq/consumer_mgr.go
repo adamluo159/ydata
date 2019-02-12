@@ -142,7 +142,7 @@ type lookupTopics struct {
 
 func (m *ConsumerMgr) checkValidTopic() {
 	ts := &lookupTopics{}
-	err := apiRequestNegotiateV1("GET", "/topics", nil, ts)
+	err := ApiRequestNegotiateV1("GET", "/topics", nil, ts)
 	if err != nil {
 		log.Error("checkValidTopic %v", err)
 		return
