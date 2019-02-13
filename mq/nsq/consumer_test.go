@@ -92,8 +92,6 @@ func TestTopic(t *testing.T) {
 	cmgr.RemoveConsumer("test2")
 	c2 <- true
 
-	cmgr.Close()
-
 	err = cmgr.RemoveConsumer("madaha")
 	if err != nil {
 		log.Println(err)
