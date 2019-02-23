@@ -12,10 +12,8 @@ func TestConfig(t *testing.T) {
 		return
 	}
 	for _, v := range cfg.Nsqs {
-		log.Printf("nsqs :%+v\n", v)
-	}
-	for _, v := range cfg.Mysqls {
-		log.Printf("msqls:%+v\n", v)
+		log.Printf("nsqs :%+v mysql:%+v consumer:%+v \n ", v, v.Mysql, v.Consumer)
 	}
 	log.Printf("loglevel:%+v\n", cfg.LogLevel)
+	log.Println("lookupds:", cfg.LookupdAddr)
 }

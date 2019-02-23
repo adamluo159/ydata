@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/adamluo159/ydata/config"
 	"github.com/adamluo159/ydata/log"
 	_ "github.com/go-sql-driver/mysql"
 	jsoniter "github.com/json-iterator/go"
@@ -34,8 +35,8 @@ type dataBaseInfo struct {
 	sync.WaitGroup
 }
 
-func New(user, passwd, addr, dbname string, qlen, save_count int) (IDataBaseInfo, error) {
-	url := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8", user, passwd, addr, dbname)
+func New(cfg *config.MysqlConfig) (IDataBaseInfo, error) {
+	url := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8", cfg.Username, cfg.Password, cfg.Addr, cfg.Database)
 	db, err := sql.Open("mysql", url)
 	if err != nil {
 		return nil, err
@@ -44,9 +45,9 @@ func New(user, passwd, addr, dbname string, qlen, save_count int) (IDataBaseInfo
 	d := &dataBaseInfo{
 		tables:     make(map[string]*tableInfo),
 		db:         db,
-		queue_len:  qlen,
-		save_count: save_count,
-		dbname:     dbname,
+		queue_len:  cfg.BufferSize,
+		save_count: cfg.SaveCount,
+		dbname:     cfg.Database,
 	}
 	return d, nil
 }

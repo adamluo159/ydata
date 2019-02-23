@@ -1,19 +1,17 @@
 package nsq
 
-import nsq "github.com/nsqio/go-nsq"
+import (
+	"github.com/adamluo159/ydata/config"
+	nsq "github.com/nsqio/go-nsq"
+)
 
 type Worker interface {
 	Handle([]byte) error
 	Close()
 }
 
-type ConsumerCfg struct {
-	Topic   string
-	Channel string
-	worker  Worker
-}
-
 type yConsumer struct {
-	consu *nsq.Consumer
-	cfg   *ConsumerCfg
+	consu  *nsq.Consumer
+	cfg    *config.ConsumerConfig
+	worker Worker
 }

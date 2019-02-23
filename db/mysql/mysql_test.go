@@ -4,6 +4,8 @@ import (
 	"log"
 	"testing"
 	"time"
+
+	"github.com/adamluo159/ydata/config"
 )
 
 type ydataTable struct {
@@ -17,7 +19,13 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	dbase, err := New("", "", "127.0.0.1", "test", 20, 10)
+	cfg := &config.MysqlConfig{
+		Addr:       "127.0.0.1",
+		Database:   "test",
+		BufferSize: 20,
+		SaveCount:  10,
+	}
+	dbase, err := New(cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -62,7 +70,13 @@ func TestInsert(t *testing.T) {
 func TestClose(t *testing.T) {
 	gdatabase.Close()
 
-	dbase, err := New("", "", "127.0.0.1", "test", 100, 80)
+	cfg := &config.MysqlConfig{
+		Addr:       "127.0.0.1",
+		Database:   "test",
+		BufferSize: 100,
+		SaveCount:  80,
+	}
+	dbase, err := New(cfg)
 	if err != nil {
 		panic(err)
 	}

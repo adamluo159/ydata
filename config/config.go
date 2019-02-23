@@ -4,11 +4,15 @@ import (
 	"io/ioutil"
 
 	"github.com/BurntSushi/toml"
-	"github.com/nsqio/go-nsq"
+	nsq "github.com/nsqio/go-nsq"
 )
 
 type NsqConfig struct {
-	Addr        []string
+	Consumer *ConsumerConfig
+	Mysql    *MysqlConfig
+}
+
+type ConsumerConfig struct {
 	Topic       string
 	Channel     string
 	MaxInFlight int
@@ -21,14 +25,13 @@ type MysqlConfig struct {
 	Database   string
 	BufferSize int
 	SaveCount  int
-	Topic      string
 }
 
 type Config struct {
 	Nsqs         []*NsqConfig
-	Mysqls       []*MysqlConfig
-	LogLevel     string
+	LookupdAddr  []string
 	ClientConfig *nsq.Config
+	LogLevel     string
 }
 
 func NewConfig(path string) (*Config, error) {

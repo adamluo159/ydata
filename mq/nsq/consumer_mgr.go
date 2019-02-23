@@ -6,51 +6,26 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/adamluo159/ydata/config"
 	"github.com/adamluo159/ydata/log"
 	nsq "github.com/nsqio/go-nsq"
 )
 
 type ConsumerMgr struct {
 	consumer_map sync.Map
+	nsq_cfg      *nsq.Config
 
-	nsq_cfg       *nsq.Config
 	lookupd_addrs []string
-
-	close_chan chan bool
-	close_flag int32
+	close_chan    chan bool
+	close_flag    int32
 }
 
-func NewConSumerMgr(lookupd_addrs []string, cfgs []*ConsumerCfg, nsq_cfg *nsq.Config) (*ConsumerMgr, error) {
-	m := &ConsumerMgr{
-		nsq_cfg:       nsq_cfg,
+func NewConSumerMgr(cfg *nsq.Config, lookupd_addrs []string) *ConsumerMgr {
+	return &ConsumerMgr{
+		nsq_cfg:       cfg,
 		lookupd_addrs: lookupd_addrs,
 		close_chan:    make(chan bool, 1),
 	}
-	defer func() {
-		if r := recover(); r != nil {
-			m.Close()
-		}
-	}()
-
-	var final_err error
-	for k, v := range cfgs {
-		if v == nil {
-			final_err = fmt.Errorf("cfgs index:%d null", k)
-			break
-		}
-		err := m.AddConsumer(v)
-		if err != nil {
-			final_err = fmt.Errorf("topic:%s channel:%s %v", v.Topic, v.Channel, err)
-			break
-		}
-	}
-
-	if final_err == nil {
-		return m, nil
-	}
-
-	m.Close()
-	return nil, final_err
 }
 
 func (m *ConsumerMgr) Close() {
@@ -60,12 +35,12 @@ func (m *ConsumerMgr) Close() {
 		v := value.(*yConsumer)
 		v.consu.Stop()
 		<-v.consu.StopChan
-		v.cfg.worker.Close()
+		v.worker.Close()
 		return true
 	})
 }
 
-func (m *ConsumerMgr) AddConsumer(cfg *ConsumerCfg) error {
+func (m *ConsumerMgr) AddConsumer(cfg *config.ConsumerConfig, worker Worker) error {
 	if atomic.LoadInt32(&m.close_flag) == 1 {
 		return fmt.Errorf("consumer mgr is closing.")
 	}
@@ -76,7 +51,7 @@ func (m *ConsumerMgr) AddConsumer(cfg *ConsumerCfg) error {
 	}
 
 	consu.AddHandler(nsq.HandlerFunc(func(m *nsq.Message) error {
-		return cfg.worker.Handle(m.Body)
+		return worker.Handle(m.Body)
 	}))
 
 	err = consu.ConnectToNSQLookupds(m.lookupd_addrs)
@@ -86,7 +61,7 @@ func (m *ConsumerMgr) AddConsumer(cfg *ConsumerCfg) error {
 		return err
 	}
 
-	_, loaded := m.consumer_map.LoadOrStore(cfg.Topic, &yConsumer{consu, cfg})
+	_, loaded := m.consumer_map.LoadOrStore(cfg.Topic, &yConsumer{consu, cfg, worker})
 	if loaded {
 		consu.Stop()
 		<-consu.StopChan
@@ -113,7 +88,7 @@ func (m *ConsumerMgr) RemoveConsumer(topic string) error {
 	vv.consu.Stop()
 	<-vv.consu.StopChan
 
-	vv.cfg.worker.Close()
+	vv.worker.Close()
 
 	<-vv.consu.StopChan
 	m.consumer_map.Delete(topic)
